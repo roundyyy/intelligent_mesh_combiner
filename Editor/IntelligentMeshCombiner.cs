@@ -32,6 +32,19 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private const int MaxRecursionDepth = 10;
 
+    private enum ClusteringAlgorithm
+    {
+        ProximityBased,
+        KMeans
+    }
+
+    private ClusteringAlgorithm selectedAlgorithm = ClusteringAlgorithm.ProximityBased;
+    private int kClusters = 5;
+    private int kMeansIterations = 10;
+
+    private float gizmoSphereOpacity = 0.2f;
+    private float gizmoSphereScale = 1f;
+
     [MenuItem("Tools/IntelligentMeshCombiner")]
     public static void ShowWindow()
     {
@@ -40,18 +53,36 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private void OnGUI()
     {
-        GUILayout.Label("IntelligentMeshCombiner v0.1", EditorStyles.boldLabel);
+        GUILayout.Label("Intelligent Mesh Combiner v0.2", EditorStyles.boldLabel);
 
         EditorGUI.BeginChangeCheck();
         parentObject = (Transform)EditorGUILayout.ObjectField("Parent Object", parentObject, typeof(Transform), true);
+
+        selectedAlgorithm = (ClusteringAlgorithm)EditorGUILayout.EnumPopup("Clustering Algorithm", selectedAlgorithm);
+
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUI.BeginDisabledGroup(selectedAlgorithm != ClusteringAlgorithm.KMeans);
+        EditorGUILayout.LabelField("K-Means Settings", EditorStyles.boldLabel);
+        kClusters = EditorGUILayout.IntSlider("Number of Clusters (K)", kClusters, 2, 50);
+        kMeansIterations = EditorGUILayout.IntSlider("Max Iterations", kMeansIterations, 5, 100);
+        EditorGUI.EndDisabledGroup();
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUI.BeginDisabledGroup(selectedAlgorithm != ClusteringAlgorithm.ProximityBased);
+        EditorGUILayout.LabelField("Proximity-Based Settings", EditorStyles.boldLabel);
+        groupingRadius = EditorGUILayout.Slider("Grouping Radius", groupingRadius, 0.1f, 100f);
+        subgroupRadius = EditorGUILayout.Slider("Subgroup Radius", subgroupRadius, 0.1f, groupingRadius);
+        EditorGUI.EndDisabledGroup();
+        EditorGUILayout.EndVertical();
         if (EditorGUI.EndChangeCheck() && parentObject != null)
         {
             BuildClusters();
         }
 
         EditorGUI.BeginChangeCheck();
-        groupingRadius = EditorGUILayout.Slider("Grouping Radius", groupingRadius, 0.1f, 100f);
-        subgroupRadius = EditorGUILayout.Slider("Subgroup Radius", subgroupRadius, 0.1f, groupingRadius);
+        // groupingRadius = EditorGUILayout.Slider("Grouping Radius", groupingRadius, 0.1f, 100f);
+        // subgroupRadius = EditorGUILayout.Slider("Subgroup Radius", subgroupRadius, 0.1f, groupingRadius);
         triangleLimit = EditorGUILayout.IntSlider("Triangle Limit", triangleLimit, 1000, 100000);
         if (EditorGUI.EndChangeCheck())
         {
@@ -63,6 +94,10 @@ public class IntelligentMeshCombiner : EditorWindow
         markCombinedStatic = EditorGUILayout.Toggle("Mark Combined Static", markCombinedStatic);
         destroySourceObjects = EditorGUILayout.Toggle("Destroy Source Objects", destroySourceObjects);
         newParentName = EditorGUILayout.TextField("New Parent Name", newParentName);
+        EditorGUILayout.Space(10);
+        EditorGUILayout.LabelField("Visualization Settings", EditorStyles.boldLabel);
+        gizmoSphereOpacity = EditorGUILayout.Slider("Gizmo Sphere Opacity", gizmoSphereOpacity, 0.05f, 1f);
+        gizmoSphereScale = EditorGUILayout.Slider("Gizmo Sphere Scale", gizmoSphereScale, 0.1f, 2f);
 
         EditorGUI.BeginDisabledGroup(parentObject == null);
         if (GUILayout.Button("Rebuild Clusters"))
@@ -134,17 +169,18 @@ public class IntelligentMeshCombiner : EditorWindow
             }
         }
     }
-
+    private Vector2 infoScrollPosition;
 
     private void DisplayExpandedInfo()
     {
         showInfoSection = EditorGUILayout.Foldout(showInfoSection, "Tool Information");
         if (showInfoSection)
         {
+            infoScrollPosition = EditorGUILayout.BeginScrollView(infoScrollPosition, GUILayout.Height(200));
             EditorGUILayout.HelpBox(
                 "The Intelligent Mesh Combiner tool allows you to group and combine meshes based on their proximity and materials.\n\n" +
                 "Features:\n" +
-                "- Group objects within a specified radius\n" +
+                "- Group objects within a specified radius or using K-means clustering\n" +
                 "- Combine meshes while maintaining their original positions\n" +
                 "- Automatically handle multiple materials\n" +
                 "- Visualize clusters with material-specific colors\n" +
@@ -152,20 +188,50 @@ public class IntelligentMeshCombiner : EditorWindow
                 "- Option to rebuild lightmap UVs for combined meshes\n" +
                 "- Option to add mesh colliders to combined objects\n" +
                 "- Mark combined objects as static\n" +
-                "- Option to destroy source objects after combining\n" +
-                  "Usage:\n" +
+                "- Option to destroy source objects after combining\n\n" +
+                "Usage:\n" +
                 "1. Select a parent object containing the meshes you want to group\n" +
-                "2. Adjust the grouping radius and other parameters as needed\n" +
-                "3. Click 'Rebuild Clusters' to analyze the objects\n" +
-                "4. Use 'Group Objects' to group without combining, or 'Group and Combine Clusters' to both group and combine meshes\n" +
-                "5. Review the generated clusters in the scene view, where different materials are represented by subtle color variations\n\n" +
+                "2. Choose between proximity-based or K-means clustering\n" +
+                "3. Adjust the grouping parameters as needed\n" +
+                "4. Click 'Rebuild Clusters' to analyze the objects\n" +
+                "5. Use 'Group Objects' to group without combining, or 'Group and Combine Clusters' to both group and combine meshes\n" +
+                "6. Review the generated clusters in the scene view, where different materials are represented by subtle color variations\n\n" +
                 "Limitations:\n" +
+                "- Objects with different materials cannot be combined into a single mesh\n" +
                 "- Skinned meshes are not supported for combination\n" +
                 "- Particle systems and other non-mesh renderers are ignored\n\n" +
                 "Note: Combined meshes are saved in the 'IMC_Meshes' folder in your project's Assets directory.",
                 MessageType.Info
             );
+            EditorGUILayout.EndScrollView();
         }
+    }
+
+    private void BuildClusters()
+    {
+        if (parentObject == null)
+        {
+            clustersBuilt = false;
+            clusters.Clear();
+            SceneView.RepaintAll();
+            return;
+        }
+
+        clusters.Clear();
+        List<MeshRenderer> renderers = parentObject.GetComponentsInChildren<MeshRenderer>().ToList();
+
+        if (selectedAlgorithm == ClusteringAlgorithm.KMeans)
+        {
+            BuildClustersKMeans(renderers);
+        }
+        else
+        {
+            BuildClustersProximity(renderers);
+        }
+
+        clustersBuilt = true;
+        SceneView.RepaintAll();
+        Repaint();
     }
 
     private void ListMaterials()
@@ -196,7 +262,7 @@ public class IntelligentMeshCombiner : EditorWindow
         }
     }
 
-    private void BuildClusters()
+    private void BuildClustersProximity(List<MeshRenderer> renderers)
     {
         if (parentObject == null)
         {
@@ -207,7 +273,7 @@ public class IntelligentMeshCombiner : EditorWindow
         }
 
         clusters.Clear();
-        List<MeshRenderer> renderers = parentObject.GetComponentsInChildren<MeshRenderer>().ToList();
+        //  renderers = parentObject.GetComponentsInChildren<MeshRenderer>().ToList();
 
         while (renderers.Count > 0)
         {
@@ -232,6 +298,111 @@ public class IntelligentMeshCombiner : EditorWindow
         clustersBuilt = true;
         SceneView.RepaintAll();
         Repaint();
+    }
+
+    private void BuildClustersKMeans(List<MeshRenderer> renderers)
+    {
+        Dictionary<Material, List<MeshRenderer>> materialGroups = new Dictionary<Material, List<MeshRenderer>>();
+
+        foreach (MeshRenderer renderer in renderers)
+        {
+            if (!materialGroups.ContainsKey(renderer.sharedMaterial))
+            {
+                materialGroups[renderer.sharedMaterial] = new List<MeshRenderer>();
+            }
+            materialGroups[renderer.sharedMaterial].Add(renderer);
+        }
+
+        foreach (var materialGroup in materialGroups)
+        {
+            List<Vector3> centroids = InitializeRandomCentroids(materialGroup.Value, kClusters);
+
+            for (int iteration = 0; iteration < kMeansIterations; iteration++)
+            {
+                Dictionary<int, List<MeshRenderer>> clusterAssignments = new Dictionary<int, List<MeshRenderer>>();
+                for (int i = 0; i < kClusters; i++)
+                {
+                    clusterAssignments[i] = new List<MeshRenderer>();
+                }
+
+                foreach (MeshRenderer renderer in materialGroup.Value)
+                {
+                    int nearestCentroidIndex = FindNearestCentroidIndex(renderer.transform.position, centroids);
+                    clusterAssignments[nearestCentroidIndex].Add(renderer);
+                }
+
+                for (int i = 0; i < kClusters; i++)
+                {
+                    if (clusterAssignments[i].Count > 0)
+                    {
+                        Vector3 newCentroid = Vector3.zero;
+                        foreach (MeshRenderer renderer in clusterAssignments[i])
+                        {
+                            newCentroid += renderer.transform.position;
+                        }
+                        centroids[i] = newCentroid / clusterAssignments[i].Count;
+                    }
+                }
+
+                // If this is the last iteration, create the final clusters
+                if (iteration == kMeansIterations - 1)
+                {
+                    for (int i = 0; i < kClusters; i++)
+                    {
+                        if (clusterAssignments[i].Count > 0)
+                        {
+                            Cluster newCluster = new Cluster(clusterAssignments[i][0]);
+                            for (int j = 1; j < clusterAssignments[i].Count; j++)
+                            {
+                                newCluster.AddRenderer(clusterAssignments[i][j]);
+                            }
+                            newCluster.CalculateTriangles();
+                            clusters.AddRange(SubdivideClusterRecursive(newCluster, 0));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private List<Vector3> InitializeRandomCentroids(List<MeshRenderer> renderers, int k)
+    {
+        List<Vector3> centroids = new List<Vector3>();
+        Bounds sceneBounds = new Bounds(renderers[0].transform.position, Vector3.zero);
+
+        foreach (MeshRenderer renderer in renderers)
+        {
+            sceneBounds.Encapsulate(renderer.bounds);
+        }
+
+        for (int i = 0; i < k; i++)
+        {
+            Vector3 randomPoint = new Vector3(
+                Random.Range(sceneBounds.min.x, sceneBounds.max.x),
+                Random.Range(sceneBounds.min.y, sceneBounds.max.y),
+                Random.Range(sceneBounds.min.z, sceneBounds.max.z)
+            );
+            centroids.Add(randomPoint);
+        }
+
+        return centroids;
+    }
+
+    private int FindNearestCentroidIndex(Vector3 position, List<Vector3> centroids)
+    {
+        int nearestIndex = 0;
+        float nearestDistanceSqr = float.MaxValue;
+
+        for (int i = 0; i < centroids.Count; i++)
+        {
+            float distanceSqr = (centroids[i] - position).sqrMagnitude;
+            if (distanceSqr < nearestDistanceSqr)
+            {
+                nearestDistanceSqr = distanceSqr;
+                nearestIndex = i;
+            }
+        }
+
+        return nearestIndex;
     }
 
     private void GroupAndCombineClusters()
@@ -494,11 +665,14 @@ public class IntelligentMeshCombiner : EditorWindow
                 color = GetMaterialColor(cluster.Material);
             }
 
+            color.a = gizmoSphereOpacity;
             Handles.color = color;
 
             float radius = cluster.IsSubdivided ? subgroupRadius : groupingRadius;
-            Handles.SphereHandleCap(0, cluster.Center, Quaternion.identity, radius * 2, EventType.Repaint);
+            // Apply the scale factor to the sphere size
+            Handles.SphereHandleCap(0, cluster.Center, Quaternion.identity, radius * gizmoSphereScale, EventType.Repaint);
 
+            // Keep the lines fully opaque
             Handles.color = cluster.TriangleCount > triangleLimit ? Color.red : (cluster.IsSubdivided ? Color.green : Color.yellow);
             foreach (MeshRenderer renderer in cluster.Renderers)
             {
