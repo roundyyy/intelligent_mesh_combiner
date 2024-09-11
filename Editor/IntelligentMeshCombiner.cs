@@ -46,6 +46,8 @@ public class IntelligentMeshCombiner : EditorWindow
     private float gizmoSphereOpacity = 0.2f;
     private float gizmoSphereScale = 1f;
 
+    private bool rebuildNormals = false;
+
     [MenuItem("Tools/IntelligentMeshCombiner")]
     public static void ShowWindow()
     {
@@ -91,6 +93,7 @@ public class IntelligentMeshCombiner : EditorWindow
         }
 
         rebuildLightmapUV = EditorGUILayout.Toggle("Rebuild Lightmap UV", rebuildLightmapUV);
+        rebuildNormals = EditorGUILayout.Toggle("Rebuild Normals", rebuildNormals);
         addMeshCollider = EditorGUILayout.Toggle("Add Mesh Collider", addMeshCollider);
         markCombinedStatic = EditorGUILayout.Toggle("Mark Combined Static", markCombinedStatic);
         destroySourceObjects = EditorGUILayout.Toggle("Destroy Source Objects", destroySourceObjects);
@@ -522,6 +525,10 @@ public class IntelligentMeshCombiner : EditorWindow
 
         Mesh combinedMesh = new Mesh();
         combinedMesh.CombineMeshes(combineInstances.ToArray(), true, true);
+        if (rebuildNormals)
+        {
+            combinedMesh.RecalculateNormals();
+        }
 
         if (rebuildLightmapUV)
         {
