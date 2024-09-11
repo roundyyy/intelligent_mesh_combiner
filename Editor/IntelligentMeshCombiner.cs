@@ -3,6 +3,7 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System;
 
 public class IntelligentMeshCombiner : EditorWindow
 {
@@ -377,9 +378,9 @@ public class IntelligentMeshCombiner : EditorWindow
         for (int i = 0; i < k; i++)
         {
             Vector3 randomPoint = new Vector3(
-                Random.Range(sceneBounds.min.x, sceneBounds.max.x),
-                Random.Range(sceneBounds.min.y, sceneBounds.max.y),
-                Random.Range(sceneBounds.min.z, sceneBounds.max.z)
+                UnityEngine.Random.Range(sceneBounds.min.x, sceneBounds.max.x),
+                UnityEngine.Random.Range(sceneBounds.min.y, sceneBounds.max.y),
+                UnityEngine.Random.Range(sceneBounds.min.z, sceneBounds.max.z)
             );
             centroids.Add(randomPoint);
         }
@@ -567,9 +568,14 @@ public class IntelligentMeshCombiner : EditorWindow
             Directory.CreateDirectory(MeshSavePath);
         }
 
-        string assetPath = $"{MeshSavePath}/{objectName}_combined.asset";
-        AssetDatabase.CreateAsset(mesh, AssetDatabase.GenerateUniqueAssetPath(assetPath));
+        // Generate a GUID for the unique identifier
+        string uniqueId = Guid.NewGuid().ToString("N");
+
+        string assetPath = $"{MeshSavePath}/{objectName}_combined_{uniqueId}.asset";
+        AssetDatabase.CreateAsset(mesh, assetPath);
         AssetDatabase.SaveAssets();
+
+        Debug.Log($"Mesh saved as: {assetPath}");
     }
     private List<Cluster> SubdivideClusterRecursive(Cluster cluster, int level)
     {
