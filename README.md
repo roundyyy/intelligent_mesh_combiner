@@ -18,7 +18,13 @@ Intelligent Mesh Combiner is a powerful Unity Editor tool designed to optimize y
 - Marking of combined objects as static
 - Option to destroy source objects after combining
 
-## Installation
+
+
+## Quick Start and Installation
+
+[Download Unity Package](https://github.com/roundyyy/intelligent_mesh_combiner/releases/download/v02/IntelligentMEshCombiner_02.unitypackage)
+
+or
 
 1. Clone or download this repository.
 2. Copy the `IntelligentMeshCombiner.cs` file into your Unity project's `Editor` folder.
