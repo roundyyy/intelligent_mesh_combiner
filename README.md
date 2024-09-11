@@ -1,16 +1,17 @@
 # Intelligent Mesh Combiner for Unity
 
-IntelligentMeshCombiner is a powerful Unity Editor tool designed to optimize your scenes by intelligently grouping and combining meshes based on their proximity and materials. This tool offers a sophisticated approach to reducing draw calls while preserving the visual fidelity and spatial relationships of your Unity scenes.
-
 ![IntelligentMeshCombiner](imc.png)
+
+IntelligentMeshCombiner is a powerful Unity Editor tool designed to optimize your scenes by intelligently grouping and combining meshes based on their proximity and materials. This tool offers a sophisticated approach to reducing draw calls while preserving the visual fidelity and spatial relationships of your Unity scenes.
 
 ## Features
 
-- Proximity-based object grouping within a specified radius
+- Two clustering algorithms: Proximity-based and K-means
 - Adaptive cluster sizes that respect scene layout
 - Automatic handling of multiple materials
 - Creation of subgroups for clusters exceeding a specified triangle limit
 - Visualization of clusters with material-specific colors for main groups
+- Adjustable gizmo sphere opacity and scale for better visualization
 - Saving of combined meshes as assets in an 'IMC_Meshes' folder
 - Option to rebuild lightmap UVs for combined meshes
 - Option to add mesh colliders to combined objects
@@ -24,6 +25,26 @@ IntelligentMeshCombiner is a powerful Unity Editor tool designed to optimize you
    - If you don't have an `Editor` folder, create one in your project's Assets directory.
 3. The tool will appear in Unity under "Tools > IntelligentMeshCombiner" in the top menu.
 
+## Clustering Algorithms
+
+### 1. Proximity-Based Clustering
+
+- Groups objects based on their physical proximity within a specified radius
+- Ideal for scenes with organically distributed objects
+- Parameters:
+  - Grouping Radius: Controls the maximum distance between objects in a cluster
+  - Subgroup Radius: Defines the radius for creating smaller clusters within large groups
+
+### 2. K-Means Clustering
+
+- Groups objects using the K-means algorithm, which aims to partition n observations into k clusters
+- Suitable for scenes where you want more control over the number of resulting clusters
+- Parameters:
+  - Number of Clusters (K): Specifies the desired number of clusters
+  - Max Iterations: Controls the maximum number of iterations for the K-means algorithm
+
+Both algorithms respect material boundaries, ensuring that only objects with the same material are grouped together.
+
 ## How to Use
 
 1. Open the IntelligentMeshCombiner window by selecting "Tools > IntelligentMeshCombiner" from the Unity menu.
@@ -32,13 +53,16 @@ IntelligentMeshCombiner is a powerful Unity Editor tool designed to optimize you
 
 3. In the IntelligentMeshCombiner window:
    - Assign the selected parent object to the "Parent Object" field.
-   - Adjust the "Grouping Radius" to control how close objects need to be to form a group.
-   - Set the "Subgroup Radius" for creating smaller clusters within large groups.
-   - Adjust the "Triangle Limit" to control when subgroups are created.
+   - Choose between Proximity-Based and K-Means clustering algorithms.
+   - Adjust the parameters for your chosen algorithm:
+     - For Proximity-Based: Set the "Grouping Radius" and "Subgroup Radius"
+     - For K-Means: Set the "Number of Clusters (K)" and "Max Iterations"
+   - Set the "Triangle Limit" to control when subgroups are created.
    - Configure additional options like rebuilding lightmap UVs, adding mesh colliders, etc.
+   - Adjust the gizmo sphere opacity and scale for better visualization in the scene view.
 
 4. Click "Rebuild Clusters" to analyze the objects and visualize the groupings in the scene view.
-   - Main groups will be displayed as orange spheres, with subtle color variations for different materials.
+   - Main groups will be displayed as colored spheres, with subtle variations for different materials.
    - Subgroups will appear as green spheres.
    - Groups exceeding the triangle limit will be shown in red.
 
@@ -50,58 +74,39 @@ IntelligentMeshCombiner is a powerful Unity Editor tool designed to optimize you
 
 7. The tool will create new combined objects and save the combined meshes as assets in the 'IMC_Meshes' folder within your project's Assets directory.
 
-## Intelligent Grouping Mechanism
+## Advantages Over Cell-Based Grouping
 
-The core strength of IntelligentMeshCombiner lies in its adaptive grouping algorithm, which offers several advantages over traditional cell-based combining methods:
+IntelligentMeshCombiner offers several advantages over traditional cell-based grouping methods:
 
-1. **Proximity-Based Grouping**: 
-   - Objects are grouped based on their actual proximity to each other, rather than their position within predetermined grid cells.
-   - This approach preserves the logical and visual relationships between objects in your scene.
+1. **Adaptive Clustering**: Unlike fixed-size cells, our algorithms adapt to the natural distribution of objects in your scene. This results in more logical and visually coherent groupings.
 
-2. **Adaptive Cluster Sizes**: 
-   - Unlike fixed-size cells, our grouping mechanism adapts to the natural clustering of objects in your scene.
-   - Dense areas form larger groups, while sparse areas maintain smaller, more appropriate groupings.
+2. **Material Awareness**: The tool respects material boundaries, ensuring that only objects with the same material are combined. This preserves the visual integrity of your scene while still optimizing performance.
 
-3. **Material-Aware Combining**: 
-   - The tool intelligently handles multiple materials, ensuring that only compatible objects are combined.
-   - This preserves material integrity while still optimizing draw calls wherever possible.
+3. **Flexible Grouping Sizes**: With the proximity-based algorithm, you can easily adjust the grouping radius to suit different areas of your scene. Dense areas can have smaller radii, while sparse areas can use larger radii.
 
-4. **Triangle Count Management**:
-   - Large clusters are automatically subdivided based on a customizable triangle count limit.
-   - This prevents the creation of overly complex meshes that could impact performance or exceed engine limitations.
+4. **Controlled Cluster Count**: The K-means algorithm allows you to specify exactly how many clusters you want, giving you precise control over the level of optimization.
 
-5. **Spatial Relationship Preservation**:
-   - By grouping nearby objects, the tool maintains the spatial relationships and layout of your original scene.
-   - This is particularly beneficial for large, organically structured environments.
+5. **No Arbitrary Boundaries**: Cell-based methods can create arbitrary splits at cell boundaries, potentially separating objects that should logically be grouped. Our algorithms avoid this issue by considering the actual spatial relationships between objects.
 
-6. **Flexible Grouping Parameters**:
-   - The grouping radius and subgroup radius can be adjusted to fine-tune the grouping process for different types of scenes or specific areas.
+6. **Hierarchical Subgrouping**: The tool can create subgroups within larger clusters, allowing for more nuanced optimization that respects both large-scale and small-scale object relationships.
 
-7. **Visual Feedback**:
-   - The tool provides immediate visual feedback in the scene view, allowing you to see and adjust groupings before committing to mesh combination.
+7. **Visual Feedback**: The gizmo visualization allows you to see and fine-tune your groupings before committing to changes, something not typically available with cell-based methods.
 
-8. **Hierarchical Grouping**:
-   - Main groups and subgroups are created hierarchically, allowing for organized management of combined objects.
+## Tips
 
-This intelligent grouping approach offers several benefits over cell-based combining:
-- It's more adaptive to the actual layout of your scene.
-- It avoids arbitrary splits that can occur at cell boundaries in grid-based systems.
-- It provides more control over the granularity of optimization.
-- It better preserves the intended structure and relationships of objects in the scene.
+- Experiment with both clustering algorithms to see which works best for your specific scene layout.
+- Use the gizmo visualization options to fine-tune your clustering results before combining.
+- For scenes with varied object density, the Proximity-Based algorithm might yield more natural groupings.
+- If you have a specific number of groups in mind, the K-Means algorithm allows you to set this directly.
+- Always make a backup of your scene before performing large-scale mesh combining operations.
+- For large scenes, consider combining meshes in sections rather than all at once.
+- Pay attention to the material-specific colors in main groups to ensure objects are being grouped as expected.
 
 ## Limitations
 
 - Objects with different materials cannot be combined into a single mesh.
 - Skinned meshes are not supported for combination.
 - Particle systems and other non-mesh renderers are ignored.
-
-## Tips
-
-- Use the scene view gizmos to visualize how objects will be grouped before combining.
-- Experiment with different radius and triangle limit settings to find the optimal balance between performance and visual quality.
-- Always make a backup of your scene before performing large-scale mesh combining operations.
-- For large scenes, consider combining meshes in sections rather than all at once.
-- Pay attention to the material-specific colors in main groups to ensure objects are being grouped as expected.
 
 ## Contributing
 
@@ -111,6 +116,7 @@ Contributions to improve IntelligentMeshCombiner are welcome. Please feel free t
 - Include steps to reproduce for bug reports.
 - Include or update tests and documentation for new or changed functionality.
 - Follow the existing code style and structure.
+
 
 
 
