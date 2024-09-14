@@ -2,11 +2,11 @@
 
 ![IntelligentMeshCombiner](imc.png)
 
-Intelligent Mesh Combiner is a simple yet powerful Unity Editor tool designed to optimize your scenes by intelligently grouping and combining meshes based on their proximity and materials. This tool offers a sophisticated approach to reducing draw calls while preserving the visual fidelity and spatial relationships of your Unity scenes.
+Intelligent Mesh Combiner is a powerful Unity Editor tool designed to optimize your scenes by intelligently grouping and combining meshes based on their proximity and materials. This tool offers a sophisticated approach to reducing draw calls while preserving the visual fidelity and spatial relationships of your Unity scenes.
 
 ## Features
 
-- Two clustering algorithms: Proximity-based and **K-means** (main feature)
+- Two clustering algorithms: Proximity-based and **K-means** 
 - Adaptive cluster sizes that respect scene layout
 - Automatic handling of multiple materials
 - Creation of subgroups for clusters exceeding a specified triangle limit
@@ -21,7 +21,7 @@ Intelligent Mesh Combiner is a simple yet powerful Unity Editor tool designed to
 
 ## Quick Start and Installation
 
-[Download Unity Package](https://github.com/roundyyy/intelligent_mesh_combiner/releases/tag/v03)
+[Download Unity Package](https://github.com/roundyyy/intelligent_mesh_combiner/releases)
 
 or
 
@@ -40,7 +40,7 @@ or
   - **Grouping Radius**: Controls the maximum distance between objects in a cluster
   - **Subgroup Radius**: Defines the radius for creating smaller clusters within large groups
 
-### 2. **K-Means Clustering** (Main Feature)
+### 2. **K-Means Clustering** 
 
 - Groups objects using the K-means algorithm, which aims to partition n observations into k clusters
 - Suitable for scenes where you want more control over the number of resulting clusters
@@ -89,6 +89,25 @@ You can fine-tune which objects are included in the clustering process using var
    - Click "Group and Combine Clusters" to both group and combine meshes.
 
 7. The tool will create new combined objects and save the combined meshes as assets in the 'IMC_Meshes' folder within your project's Assets directory.
+
+## LOD Handling
+
+The Intelligent Mesh Combiner tool provides flexible handling for objects with and without LOD (Level of Detail) groups. You can choose between two options depending on your needs:
+
+1. **Combine LODs Separately**
+- When this option is selected, objects with LOD groups are combined separately from objects without LOD groups. This ensures that the integrity of LOD objects is maintained, and they are not merged with non-LOD objects.
+
+2. **Combine All**
+- This option merges objects without LOD groups into LOD groups. This can be useful when you want to consolidate all objects, including non-LOD objects, into a unified set of clusters that preserve the LOD functionality.
+
+### How to Use
+1. Select the parent objects containing the meshes.
+2. Choose an LOD handling option:
+   - **Combine LODs Separately**: Separate LOD group objects from non-LOD objects.
+   - **Combine All**: Include non-LOD objects in the LOD groups.
+3. Click **Rebuild Clusters** to analyze the objects based on your LOD handling selection.
+4. Review the LOD and non-LOD clusters in the scene view to ensure that the objects are grouped as expected.
+
 
 ## Advantages Over Cell-Based Grouping
 
