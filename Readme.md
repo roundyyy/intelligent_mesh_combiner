@@ -21,7 +21,7 @@ Intelligent Mesh Combiner is a simple yet powerful Unity Editor tool designed to
 
 ## Quick Start and Installation
 
-[Download Unity Package](https://github.com/roundyyy/intelligent_mesh_combiner/releases/download/v02/IntelligentMEshCombiner_03.unitypackage)
+[Download Unity Package](https://github.com/roundyyy/intelligent_mesh_combiner/releases/tag/v03)
 
 or
 
