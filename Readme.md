@@ -2,7 +2,7 @@
 
 ![IntelligentMeshCombiner](imc.png)
 
-Intelligent Mesh Combiner is a powerful Unity Editor tool designed to optimize your scenes by intelligently grouping and combining meshes based on their proximity and materials. This tool offers a sophisticated approach to reducing draw calls while preserving the visual fidelity and spatial relationships of your Unity scenes.
+Intelligent Mesh Combiner is a simple yet powerful Unity Editor tool designed to optimize your scenes by intelligently grouping and combining meshes based on their proximity and materials. This tool offers a sophisticated approach to reducing draw calls while preserving the visual fidelity and spatial relationships of your Unity scenes.
 
 ## Features
 
@@ -21,7 +21,7 @@ Intelligent Mesh Combiner is a powerful Unity Editor tool designed to optimize y
 
 ## Quick Start and Installation
 
-[Download Unity Package](https://github.com/roundyyy/intelligent_mesh_combiner/releases/download/v02/IntelligentMEshCombiner_02.unitypackage)
+[Download Unity Package](https://github.com/roundyyy/intelligent_mesh_combiner/releases/download/v02/IntelligentMEshCombiner_03.unitypackage)
 
 or
 
