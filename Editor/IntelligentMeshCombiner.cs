@@ -82,7 +82,7 @@ public class IntelligentMeshCombiner : EditorWindow
     private LODHandlingOption lodHandlingOption = LODHandlingOption.CombineLodsSeparately;
     private bool lodGroupsDetected = false;
 
-    [MenuItem("Tools/Intelligent Mesh Combiner")]
+    [MenuItem("Tools/Roundy/Intelligent Mesh Combiner")]
     public static void ShowWindow()
     {
         GetWindow<IntelligentMeshCombiner>("Intelligent Mesh Combiner");
