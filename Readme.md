@@ -28,7 +28,7 @@ or
 1. Clone or download this repository.
 2. Copy the `IntelligentMeshCombiner.cs` file into your Unity project's `Editor` folder.
    - If you don't have an `Editor` folder, create one in your project's Assets directory.
-3. The tool will appear in Unity under "Tools > IntelligentMeshCombiner" in the top menu.
+3. The tool will appear in Unity under "Tools > Roundy > IntelligentMeshCombiner" in the top menu.
 
 ## Clustering Algorithms
 
