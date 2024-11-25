@@ -137,6 +137,10 @@ IntelligentMeshCombiner offers several advantages over traditional cell-based gr
 - For large scenes, consider combining meshes in sections rather than all at once.
 - Pay attention to the material-specific colors in main groups to ensure objects are being grouped as expected.
 
+## TO DO
+
+= Speed it up. Too slow when combining lot of objects same time (due to clustering algorithms)
+
 ## Limitations
 
 - Objects with different materials cannot be combined into a single mesh.
