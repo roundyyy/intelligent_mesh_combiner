@@ -7,6 +7,12 @@ using System;
 
 public class IntelligentMeshCombiner : EditorWindow
 {
+    // ---------------------------------------------
+    //   New fields for requested functionalities
+    // ---------------------------------------------
+    private bool debugMode = true;  // <--- Toggle to enable/disable debug logs
+    private bool disableSourceRenderers = false;  // <--- Option to disable source MeshRenderers (instead of destroying)
+
     private List<Transform> parentObjects = new List<Transform>();
     private float groupingRadius = 5f;
     private float subgroupRadius = 2f;
@@ -82,10 +88,21 @@ public class IntelligentMeshCombiner : EditorWindow
     private LODHandlingOption lodHandlingOption = LODHandlingOption.CombineLodsSeparately;
     private bool lodGroupsDetected = false;
 
-    [MenuItem("Tools/Roundy/Intelligent Mesh Combiner")]
+    [MenuItem("Tools/Intelligent Mesh Combiner")]
     public static void ShowWindow()
     {
         GetWindow<IntelligentMeshCombiner>("Intelligent Mesh Combiner");
+    }
+
+    // ----------------------------------------------------------
+    // Helper: Only logs if debugMode is true
+    // ----------------------------------------------------------
+    private void Log(string message)
+    {
+        if (debugMode)
+        {
+            Debug.Log(message);
+        }
     }
 
     private void OnGUI()
@@ -122,6 +139,7 @@ public class IntelligentMeshCombiner : EditorWindow
             ToolInstructionsWindow.ShowWindow();
         }
         GUILayout.Space(10);
+
         // Parent Objects Section
         EditorGUILayout.BeginVertical("box");
         EditorGUILayout.LabelField("Parent Objects", EditorStyles.boldLabel);
@@ -199,6 +217,12 @@ public class IntelligentMeshCombiner : EditorWindow
         if (showOptions)
         {
             EditorGUILayout.BeginVertical("box");
+            // ----------------------------------------------
+            //  Add toggles for Debug Mode & disabling source
+            // ----------------------------------------------
+            debugMode = EditorGUILayout.Toggle("Debug Mode", debugMode);
+            disableSourceRenderers = EditorGUILayout.Toggle("Disable Source Renderers", disableSourceRenderers);
+
             rebuildLightmapUV = EditorGUILayout.Toggle("Rebuild Lightmap UV", rebuildLightmapUV);
             rebuildNormals = EditorGUILayout.Toggle("Rebuild Normals", rebuildNormals);
             addMeshCollider = EditorGUILayout.Toggle("Add Mesh Collider", addMeshCollider);
@@ -267,8 +291,8 @@ public class IntelligentMeshCombiner : EditorWindow
             ListMaterials();
         }
         EditorGUI.EndDisabledGroup();
-
         EditorGUILayout.EndHorizontal();
+
         if (showMaterialList)
         {
             GUILayout.Space(10);
@@ -290,14 +314,20 @@ public class IntelligentMeshCombiner : EditorWindow
             GroupObjects();
         }
 
-        // Third line: Group and Combine Clusters
+        // Third line: Combine Clusters Only (new functionality)
+        if (GUILayout.Button("Combine Clusters Only", buttonStyle))
+        {
+            CombineClustersOnly();
+        }
+
+        // Fourth line: Group and Combine Clusters
         if (GUILayout.Button("Group and Combine Clusters", buttonStyle))
         {
             GroupAndCombineClusters();
         }
         EditorGUI.EndDisabledGroup();
 
-        // Fourth line: Undo Last Operation
+        // Fifth line: Undo Last Operation
         if (GUILayout.Button("Undo Last Operation", buttonStyle))
         {
             Undo.PerformUndo();
@@ -307,9 +337,6 @@ public class IntelligentMeshCombiner : EditorWindow
 
         // Cluster Information Section
         DisplayClusterInfo();
-
-
-
 
         // End global scroll view
         EditorGUILayout.EndScrollView();
@@ -383,55 +410,87 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private void BuildClusters()
     {
+        Log("Starting BuildClusters process...");
+
         if (parentObjects == null || parentObjects.Count == 0)
         {
+            Debug.LogWarning("No parent objects specified. Clusters will be cleared.");
             clustersBuilt = false;
             clusters.Clear();
             SceneView.RepaintAll();
             return;
         }
 
+        // Clear out any old clusters
         clusters.Clear();
 
-        if (lodGroupsDetected && lodHandlingOption == LODHandlingOption.CombineLodsSeparately)
+        // If we truly detected at least one LODGroup in the hierarchy
+        if (lodGroupsDetected)
         {
-            // Separate renderers with and without LOD groups
-            List<RendererWithLODLevel> renderersWithLODGroups;
-            List<RendererWithLODLevel> renderersWithoutLODGroups;
-            int maxLODLevel;
-
-            GetRenderersWithLODLevels(out renderersWithLODGroups, out renderersWithoutLODGroups, out maxLODLevel);
-
-            // Build clusters for renderers with LOD groups
-            if (renderersWithLODGroups.Count > 0)
+            // Now consider whether the user chose to combine LODs separately or all together
+            if (lodHandlingOption == LODHandlingOption.CombineLodsSeparately)
             {
-                BuildClustersForRenderers(renderersWithLODGroups, maxLODLevel, true);
+                Log("LOD handling is set to CombineLodsSeparately.");
+
+                // Separate renderers with and without LOD groups
+                List<RendererWithLODLevel> renderersWithLODGroups;
+                List<RendererWithLODLevel> renderersWithoutLODGroups;
+                int maxLODLevel;
+
+                GetRenderersWithLODLevels(out renderersWithLODGroups, out renderersWithoutLODGroups, out maxLODLevel);
+
+                // Build clusters for renderers WITH LOD groups
+                if (renderersWithLODGroups.Count > 0)
+                {
+                    Log($"Found {renderersWithLODGroups.Count} renderers with LOD groups. Building clusters...");
+                    BuildClustersForRenderers(renderersWithLODGroups, maxLODLevel, true);
+                }
+
+                // Build clusters for renderers WITHOUT LOD groups
+                if (renderersWithoutLODGroups.Count > 0)
+                {
+                    Log($"Found {renderersWithoutLODGroups.Count} renderers without LOD groups. Building clusters...");
+                    BuildClustersForRenderers(renderersWithoutLODGroups, 0, false);
+                }
             }
-
-            // Build clusters for renderers without LOD groups
-            if (renderersWithoutLODGroups.Count > 0)
+            else
             {
-                BuildClustersForRenderers(renderersWithoutLODGroups, 0, false);
+                // "Combine All" with actual LODGroups detected
+                Log("LOD handling is set to CombineAll. Combining all renderers as if they belong to LOD groups.");
+
+                List<RendererWithLODLevel> allRenderersWithLODLevels;
+                int maxLODLevel;
+
+                GetAllRenderersWithLODLevels(out allRenderersWithLODLevels, out maxLODLevel);
+
+                Log($"Combining all renderers into clusters with LOD groups. Total: {allRenderersWithLODLevels.Count}");
+                BuildClustersForRenderers(allRenderersWithLODLevels, maxLODLevel, true);
             }
         }
         else
         {
-            // When "Combine All" is selected, treat all renderers together and create LOD levels
+            // If no LODGroup actually detected, never pass hasLODGroups = true
+            Log("No LOD groups detected in the hierarchy. Building clusters without LOD...");
+
             List<RendererWithLODLevel> allRenderersWithLODLevels;
             int maxLODLevel;
 
             GetAllRenderersWithLODLevels(out allRenderersWithLODLevels, out maxLODLevel);
 
-            BuildClustersForRenderers(allRenderersWithLODLevels, maxLODLevel, true);
+            Log($"Found {allRenderersWithLODLevels.Count} total renderers. Building clusters as non-LOD groups.");
+            BuildClustersForRenderers(allRenderersWithLODLevels, 0, false);
         }
 
+        // Done building clusters
         clustersBuilt = true;
+        Log($"BuildClusters complete. Total clusters built: {clusters.Count}");
         SceneView.RepaintAll();
         Repaint();
     }
 
     private void ListMaterials()
     {
+        Log("Listing materials...");
         if (parentObjects == null || parentObjects.Count == 0)
         {
             Debug.LogError("Please select at least one parent object first.");
@@ -454,11 +513,13 @@ public class IntelligentMeshCombiner : EditorWindow
         }
 
         showMaterialList = true; // Show the material list in the GUI
+        Log($"Found {foundMaterials.Count} unique materials.");
         Repaint(); // Repaint the GUI to show the materials
     }
 
     private void BuildClustersForRenderers(List<RendererWithLODLevel> renderersWithLOD, int maxLODLevel, bool hasLODGroups)
     {
+        Log($"Building clusters for {renderersWithLOD.Count} renderers. hasLODGroups = {hasLODGroups}, maxLODLevel = {maxLODLevel}");
         if (selectedAlgorithm == ClusteringAlgorithm.KMeans)
         {
             BuildClustersKMeans(renderersWithLOD, maxLODLevel, hasLODGroups);
@@ -471,6 +532,7 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private void BuildClustersProximity(List<RendererWithLODLevel> renderersWithLOD, int maxLODLevel, bool hasLODGroups)
     {
+        Log("Using Proximity-Based clustering...");
         List<RendererWithLODLevel> remainingRenderers = new List<RendererWithLODLevel>(renderersWithLOD);
 
         while (remainingRenderers.Count > 0)
@@ -496,19 +558,21 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private void BuildClustersKMeans(List<RendererWithLODLevel> renderersWithLOD, int maxLODLevel, bool hasLODGroups)
     {
-        Dictionary<Material, List<RendererWithLODLevel>> materialGroups = new Dictionary<Material, List<RendererWithLODLevel>>();
+        Log("Using K-Means clustering...");
+        Dictionary<Material, List<RendererWithLODLevel>> matGroups = new Dictionary<Material, List<RendererWithLODLevel>>();
 
         foreach (RendererWithLODLevel renderer in renderersWithLOD)
         {
-            if (!materialGroups.ContainsKey(renderer.Renderer.sharedMaterial))
+            if (!matGroups.ContainsKey(renderer.Renderer.sharedMaterial))
             {
-                materialGroups[renderer.Renderer.sharedMaterial] = new List<RendererWithLODLevel>();
+                matGroups[renderer.Renderer.sharedMaterial] = new List<RendererWithLODLevel>();
             }
-            materialGroups[renderer.Renderer.sharedMaterial].Add(renderer);
+            matGroups[renderer.Renderer.sharedMaterial].Add(renderer);
         }
 
-        foreach (var materialGroup in materialGroups)
+        foreach (var materialGroup in matGroups)
         {
+            Log($"K-Means on material: {materialGroup.Key.name} with {materialGroup.Value.Count} renderers");
             List<Vector3> centroids = InitializeRandomCentroids(materialGroup.Value, kClusters);
 
             for (int iteration = 0; iteration < kMeansIterations; iteration++)
@@ -519,10 +583,10 @@ public class IntelligentMeshCombiner : EditorWindow
                     clusterAssignments[i] = new List<RendererWithLODLevel>();
                 }
 
-                foreach (RendererWithLODLevel renderer in materialGroup.Value)
+                foreach (RendererWithLODLevel rend in materialGroup.Value)
                 {
-                    int nearestCentroidIndex = FindNearestCentroidIndex(renderer.Renderer.transform.position, centroids);
-                    clusterAssignments[nearestCentroidIndex].Add(renderer);
+                    int nearestCentroidIndex = FindNearestCentroidIndex(rend.Renderer.transform.position, centroids);
+                    clusterAssignments[nearestCentroidIndex].Add(rend);
                 }
 
                 for (int i = 0; i < kClusters; i++)
@@ -530,9 +594,9 @@ public class IntelligentMeshCombiner : EditorWindow
                     if (clusterAssignments[i].Count > 0)
                     {
                         Vector3 newCentroid = Vector3.zero;
-                        foreach (RendererWithLODLevel renderer in clusterAssignments[i])
+                        foreach (RendererWithLODLevel rend in clusterAssignments[i])
                         {
-                            newCentroid += renderer.Renderer.transform.position;
+                            newCentroid += rend.Renderer.transform.position;
                         }
                         centroids[i] = newCentroid / clusterAssignments[i].Count;
                     }
@@ -563,9 +627,9 @@ public class IntelligentMeshCombiner : EditorWindow
         List<Vector3> centroids = new List<Vector3>();
         Bounds sceneBounds = new Bounds(renderersWithLOD[0].Renderer.transform.position, Vector3.zero);
 
-        foreach (RendererWithLODLevel renderer in renderersWithLOD)
+        foreach (RendererWithLODLevel r in renderersWithLOD)
         {
-            sceneBounds.Encapsulate(renderer.Renderer.bounds);
+            sceneBounds.Encapsulate(r.Renderer.bounds);
         }
 
         for (int i = 0; i < k; i++)
@@ -601,6 +665,7 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private List<Cluster> SubdivideClusterRecursive(Cluster cluster, int level, int maxLODLevel)
     {
+        Log($"Checking cluster for subdivision at level {level}. Cluster Triangles = {cluster.TotalTriangles}, Limit = {triangleLimit}");
         if (level >= MaxRecursionDepth)
         {
             Debug.LogWarning($"Maximum recursion depth reached for cluster. Some objects may exceed the triangle limit.");
@@ -609,9 +674,11 @@ public class IntelligentMeshCombiner : EditorWindow
 
         if (cluster.TotalTriangles <= triangleLimit)
         {
+            Log("No subdivision needed for this cluster.");
             return new List<Cluster> { cluster };
         }
 
+        Log("Subdividing cluster...");
         List<Cluster> subclusters = new List<Cluster>();
         List<RendererWithLODLevel> remainingRenderers = new List<RendererWithLODLevel>();
         foreach (var lodList in cluster.RenderersPerLODLevel.Values)
@@ -641,8 +708,84 @@ public class IntelligentMeshCombiner : EditorWindow
         return subclusters;
     }
 
+    // ----------------------------------------------------
+    // New method: Combine Clusters Only (no grouping step)
+    // ----------------------------------------------------
+    private void CombineClustersOnly()
+    {
+        Log("Starting CombineClustersOnly...");
+        if (!clustersBuilt)
+        {
+            Debug.LogError("Please build clusters first.");
+            return;
+        }
+
+        // Create a top-level parent for the combined objects
+        GameObject combineOnlyParent = new GameObject(newParentName + "_CombineOnly");
+        Undo.RegisterCreatedObjectUndo(combineOnlyParent, "Create CombineOnly Parent");
+        combineOnlyParent.transform.position = Vector3.zero;
+        combineOnlyParent.transform.localScale = Vector3.one;
+        Log($"Created combine-only parent GameObject: {combineOnlyParent.name}");
+
+        // For each cluster, just combine – no grouping of sources
+        foreach (Cluster cluster in clusters)
+        {
+            string combinedName = $"{newParentName}_CombOnly_{cluster.Material.name}";
+            Log($"Combining objects into {combinedName} without grouping sources.");
+
+            // Create the combined GameObject
+            GameObject combinedObject = new GameObject(combinedName);
+            Undo.RegisterCreatedObjectUndo(combinedObject, "Create Combined Object");
+            combinedObject.transform.SetParent(combineOnlyParent.transform);
+            combinedObject.transform.localPosition = Vector3.zero;
+            combinedObject.transform.localScale = Vector3.one;
+
+            if (markCombinedStatic)
+            {
+                combinedObject.isStatic = true;
+            }
+
+            // Combine cluster meshes
+            Log($"Combining cluster meshes for {combinedName}...");
+            if (!CombineClusterMeshes(cluster, combinedObject))
+            {
+                Debug.LogWarning($"Failed to combine meshes for {combinedName}. Objects not combined.");
+                continue;
+            }
+
+            // Optionally destroy or disable source objects
+            foreach (var lodList in cluster.RenderersPerLODLevel.Values)
+            {
+                foreach (RendererWithLODLevel renderer in lodList)
+                {
+                    if (destroySourceObjects)
+                    {
+                        Log($"Destroying source object {renderer.Renderer.name}");
+                        Undo.DestroyObjectImmediate(renderer.Renderer.gameObject);
+                    }
+                    else
+                    {
+                        // If user wants to disable the source renderers (instead of the whole GO)
+                        if (disableSourceRenderers)
+                        {
+                            Log($"Disabling source renderer {renderer.Renderer.name}");
+                            Undo.RecordObject(renderer.Renderer, "Disable MeshRenderer");
+                            renderer.Renderer.enabled = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        Log("CombineClustersOnly complete. Clearing clusters.");
+        clustersBuilt = false;
+        clusters.Clear();
+        SceneView.RepaintAll();
+    }
+
     private void GroupAndCombineClusters()
     {
+        Log("Starting GroupAndCombineClusters...");
         if (!clustersBuilt)
         {
             Debug.LogError("Please build clusters first.");
@@ -653,11 +796,12 @@ public class IntelligentMeshCombiner : EditorWindow
         Undo.RegisterCreatedObjectUndo(newParent, "Create New Parent");
         newParent.transform.position = Vector3.zero;
         newParent.transform.localScale = Vector3.one;
+        Log($"Created new parent GameObject: {newParent.name}");
 
         foreach (Cluster cluster in clusters)
         {
             string groupName = $"{newParentName}_Group_{cluster.Material.name}";
-            Debug.Log($"Grouping and combining objects into {groupName}");
+            Log($"Grouping and combining objects into {groupName}");
 
             GameObject groupParent = new GameObject(groupName);
             Undo.RegisterCreatedObjectUndo(groupParent, "Create Group Parent");
@@ -670,6 +814,7 @@ public class IntelligentMeshCombiner : EditorWindow
             combinedObject.transform.SetParent(groupParent.transform);
             combinedObject.transform.localPosition = Vector3.zero;
             combinedObject.transform.localScale = Vector3.one;
+            Log($"Created combined GameObject: {combinedObject.name}");
 
             if (markCombinedStatic)
             {
@@ -686,10 +831,12 @@ public class IntelligentMeshCombiner : EditorWindow
             {
                 foreach (RendererWithLODLevel renderer in lodList)
                 {
+                    Log($"Moving renderer {renderer.Renderer.name} under {sourceObjectsParent.name}");
                     Undo.SetTransformParent(renderer.Renderer.transform, sourceObjectsParent.transform, "Group Source Object");
                 }
             }
 
+            Log($"Combining cluster meshes for {groupName}...");
             if (!CombineClusterMeshes(cluster, combinedObject))
             {
                 Debug.LogWarning($"Failed to combine meshes for {groupName}. Objects are grouped but not combined.");
@@ -702,10 +849,12 @@ public class IntelligentMeshCombiner : EditorWindow
                 {
                     if (destroySourceObjects)
                     {
+                        Log($"Destroying source object {renderer.Renderer.name}");
                         Undo.DestroyObjectImmediate(renderer.Renderer.gameObject);
                     }
                     else
                     {
+                        Log($"Disabling source object {renderer.Renderer.name}");
                         Undo.RecordObject(renderer.Renderer.gameObject, "Disable Original Object");
                         renderer.Renderer.gameObject.SetActive(false);
                     }
@@ -714,10 +863,12 @@ public class IntelligentMeshCombiner : EditorWindow
 
             if (destroySourceObjects)
             {
+                Log($"Destroying source objects parent {sourceObjectsParent.name}");
                 Undo.DestroyObjectImmediate(sourceObjectsParent);
             }
         }
 
+        Log("GroupAndCombineClusters complete. Clearing clusters.");
         clustersBuilt = false;
         clusters.Clear();
         SceneView.RepaintAll();
@@ -725,6 +876,8 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private bool CombineClusterMeshes(Cluster cluster, GameObject parent)
     {
+        Log($"Starting mesh combination for cluster with material: {cluster.Material.name}. Parent object: {parent.name}");
+
         int maxLODLevel = cluster.GetMaxLODLevel();
         List<LOD> lods = new List<LOD>();
 
@@ -737,17 +890,19 @@ public class IntelligentMeshCombiner : EditorWindow
 
         // Collect all renderers across all LOD levels, including -1 for objects without LODs
         List<RendererWithLODLevel> allRenderers = new List<RendererWithLODLevel>();
-        foreach (var lodRenderers in cluster.RenderersPerLODLevel.Values)
+        foreach (var lodList in cluster.RenderersPerLODLevel.Values)
         {
-            allRenderers.AddRange(lodRenderers);
+            allRenderers.AddRange(lodList);
         }
 
         // Calculate bounds and center offset
+        Log($"Calculating overall bounds for the combined mesh...");
         foreach (RendererWithLODLevel rendererWithLOD in allRenderers)
         {
             MeshFilter meshFilter = rendererWithLOD.Renderer.GetComponent<MeshFilter>();
             if (meshFilter == null || meshFilter.sharedMesh == null)
             {
+                Log($"Skipping {rendererWithLOD.Renderer.name} because MeshFilter or sharedMesh is null.");
                 continue;
             }
             Mesh mesh = meshFilter.sharedMesh;
@@ -773,6 +928,7 @@ public class IntelligentMeshCombiner : EditorWindow
         // Check if the cluster contains LOD groups or not
         if (!cluster.HasLODGroups)
         {
+            Log("Cluster does NOT have LOD groups. Combining as a single LOD...");
             // Process clusters without LOD groups
             if (cluster.RenderersPerLODLevel.TryGetValue(-1, out List<RendererWithLODLevel> renderersAtLOD))
             {
@@ -780,11 +936,13 @@ public class IntelligentMeshCombiner : EditorWindow
                 Material sharedMaterial = null;
 
                 // Combine meshes for the renderers without LOD groups
+                Log($"Found {renderersAtLOD.Count} renderers without LODs in this cluster.");
                 foreach (RendererWithLODLevel rendererWithLOD in renderersAtLOD)
                 {
                     MeshFilter meshFilter = rendererWithLOD.Renderer.GetComponent<MeshFilter>();
                     if (meshFilter == null || meshFilter.sharedMesh == null)
                     {
+                        Log($"Skipping {rendererWithLOD.Renderer.name} - no valid MeshFilter or sharedMesh.");
                         continue;
                     }
 
@@ -821,15 +979,18 @@ public class IntelligentMeshCombiner : EditorWindow
                     combinedMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
                 }
 
+                Log($"Combining {combineInstances.Count} instances into a single mesh...");
                 combinedMesh.CombineMeshes(combineInstances.ToArray(), true, true);
 
                 if (rebuildNormals)
                 {
+                    Log("Recalculating normals for combined mesh...");
                     combinedMesh.RecalculateNormals();
                 }
 
                 if (rebuildLightmapUV)
                 {
+                    Log("Generating secondary UV set for lightmapping...");
                     Unwrapping.GenerateSecondaryUVSet(combinedMesh);
                 }
 
@@ -846,21 +1007,23 @@ public class IntelligentMeshCombiner : EditorWindow
                 SaveMeshAsset(combinedMesh, $"{parent.name}_NoLOD");
 
                 // Create a new game object for this combined mesh
-                GameObject combinedObject = new GameObject($"{parent.name}_NoLOD_Combined");
-                combinedObject.transform.SetParent(parent.transform);
-                combinedObject.transform.localPosition = Vector3.zero;
-                combinedObject.transform.localScale = Vector3.one;
+                GameObject combinedObj = new GameObject($"{parent.name}_NoLOD_Combined");
+                Log($"Created combined mesh object: {combinedObj.name}");
+                combinedObj.transform.SetParent(parent.transform);
+                combinedObj.transform.localPosition = Vector3.zero;
+                combinedObj.transform.localScale = Vector3.one;
 
                 // Add components for the combined mesh
-                MeshFilter newMeshFilter = combinedObject.AddComponent<MeshFilter>();
+                MeshFilter newMeshFilter = combinedObj.AddComponent<MeshFilter>();
                 newMeshFilter.sharedMesh = combinedMesh;
 
-                MeshRenderer newRenderer = combinedObject.AddComponent<MeshRenderer>();
+                MeshRenderer newRenderer = combinedObj.AddComponent<MeshRenderer>();
                 newRenderer.sharedMaterial = sharedMaterial;
 
                 if (addMeshCollider)
                 {
-                    MeshCollider collider = combinedObject.AddComponent<MeshCollider>();
+                    Log("Adding MeshCollider to combined object...");
+                    MeshCollider collider = combinedObj.AddComponent<MeshCollider>();
                     collider.sharedMesh = combinedMesh;
                 }
 
@@ -869,6 +1032,7 @@ public class IntelligentMeshCombiner : EditorWindow
         }
         else
         {
+            Log("Cluster HAS LOD groups. Combining multiple LOD levels...");
             for (int lodLevel = 0; lodLevel <= maxLODLevel; lodLevel++)
             {
                 List<RendererWithLODLevel> renderersAtLOD = new List<RendererWithLODLevel>();
@@ -902,9 +1066,11 @@ public class IntelligentMeshCombiner : EditorWindow
 
                 if (renderersAtLOD.Count == 0)
                 {
+                    Log($"No renderers found at LOD Level {lodLevel}, skipping...");
                     continue; // Skip this LOD level if there are no renderers
                 }
 
+                Log($"Combining {renderersAtLOD.Count} renderers at LOD level {lodLevel}...");
                 List<CombineInstance> combineInstances = new List<CombineInstance>();
                 Material sharedMaterial = null;
 
@@ -914,6 +1080,7 @@ public class IntelligentMeshCombiner : EditorWindow
                     MeshFilter meshFilter = rendererWithLOD.Renderer.GetComponent<MeshFilter>();
                     if (meshFilter == null || meshFilter.sharedMesh == null)
                     {
+                        Log($"Skipping {rendererWithLOD.Renderer.name} at LOD {lodLevel} - no valid MeshFilter or sharedMesh.");
                         continue;
                     }
 
@@ -937,6 +1104,7 @@ public class IntelligentMeshCombiner : EditorWindow
 
                 if (combineInstances.Count == 0)
                 {
+                    Log($"No valid combine instances at LOD {lodLevel}, skipping...");
                     continue;
                 }
 
@@ -950,15 +1118,18 @@ public class IntelligentMeshCombiner : EditorWindow
                     combinedMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
                 }
 
+                Log($"Performing mesh combine for LOD {lodLevel} with {combineInstances.Count} instances...");
                 combinedMesh.CombineMeshes(combineInstances.ToArray(), true, true);
 
                 if (rebuildNormals)
                 {
+                    Log("Recalculating normals for combined mesh...");
                     combinedMesh.RecalculateNormals();
                 }
 
                 if (rebuildLightmapUV)
                 {
+                    Log("Generating secondary UV set for lightmapping...");
                     Unwrapping.GenerateSecondaryUVSet(combinedMesh);
                 }
 
@@ -976,6 +1147,7 @@ public class IntelligentMeshCombiner : EditorWindow
 
                 // Create a new game object for this LOD level
                 GameObject lodObject = new GameObject($"{parent.name}_LOD{lodLevel}");
+                Log($"Created LOD object: {lodObject.name} under {parent.name}");
                 lodObject.transform.SetParent(parent.transform);
                 lodObject.transform.localPosition = Vector3.zero;
                 lodObject.transform.localScale = Vector3.one;
@@ -989,6 +1161,7 @@ public class IntelligentMeshCombiner : EditorWindow
 
                 if (addMeshCollider)
                 {
+                    Log("Adding MeshCollider to LOD object...");
                     MeshCollider collider = lodObject.AddComponent<MeshCollider>();
                     collider.sharedMesh = combinedMesh;
                 }
@@ -1004,12 +1177,14 @@ public class IntelligentMeshCombiner : EditorWindow
             // Create the LOD group for the combined object
             if (lods.Count > 0)
             {
+                Log("Creating LODGroup and setting LODs...");
                 LODGroup lodGroup = parent.AddComponent<LODGroup>();
                 lodGroup.SetLODs(lods.ToArray());
                 lodGroup.RecalculateBounds();
             }
         }
 
+        Log($"Mesh combination complete for cluster (material {cluster.Material.name}).");
         return true;
     }
 
@@ -1029,22 +1204,23 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private void SaveMeshAsset(Mesh mesh, string objectName)
     {
+        Log($"Saving mesh asset for {objectName}...");
         if (!Directory.Exists(MeshSavePath))
         {
             Directory.CreateDirectory(MeshSavePath);
         }
 
         string uniqueId = Guid.NewGuid().ToString("N");
-
         string assetPath = $"{MeshSavePath}/{objectName}_{uniqueId}.asset";
         AssetDatabase.CreateAsset(mesh, assetPath);
         AssetDatabase.SaveAssets();
 
-        Debug.Log($"Mesh saved as: {assetPath}");
+        Log($"Mesh saved as: {assetPath}");
     }
 
     private void GroupObjects()
     {
+        Log("Starting GroupObjects...");
         if (!clustersBuilt)
         {
             Debug.LogError("Please build clusters first.");
@@ -1055,6 +1231,7 @@ public class IntelligentMeshCombiner : EditorWindow
         Undo.RegisterCreatedObjectUndo(newParent, "Create New Parent");
         newParent.transform.position = Vector3.zero;
         newParent.transform.localScale = Vector3.one;
+        Log($"Created group-only parent GameObject: {newParent.name}");
 
         for (int i = 0; i < clusters.Count; i++)
         {
@@ -1065,16 +1242,19 @@ public class IntelligentMeshCombiner : EditorWindow
             Undo.RegisterCreatedObjectUndo(groupParent, "Create Group Parent");
             groupParent.transform.SetParent(newParent.transform);
             groupParent.transform.position = cluster.Center;
+            Log($"Created group parent: {groupParent.name} at position {cluster.Center}");
 
             foreach (var lodList in cluster.RenderersPerLODLevel.Values)
             {
                 foreach (RendererWithLODLevel renderer in lodList)
                 {
+                    Log($"Moving renderer {renderer.Renderer.name} under {groupParent.name}");
                     Undo.SetTransformParent(renderer.Renderer.transform, groupParent.transform, "Set Parent");
                 }
             }
         }
 
+        Log("GroupObjects complete. Clearing clusters.");
         clustersBuilt = false;
         clusters.Clear();
         SceneView.RepaintAll();
@@ -1148,17 +1328,20 @@ public class IntelligentMeshCombiner : EditorWindow
 
     private void OnEnable()
     {
+        Log("IntelligentMeshCombiner OnEnable called, subscribing to SceneView.duringSceneGui.");
         SceneView.duringSceneGui += OnSceneGUI;
     }
 
     private void OnDisable()
     {
+        Log("IntelligentMeshCombiner OnDisable called, unsubscribing from SceneView.duringSceneGui.");
         SceneView.duringSceneGui -= OnSceneGUI;
     }
 
     private class Cluster
     {
-        public Dictionary<int, List<RendererWithLODLevel>> RenderersPerLODLevel { get; private set; } = new Dictionary<int, List<RendererWithLODLevel>>();
+        public Dictionary<int, List<RendererWithLODLevel>> RenderersPerLODLevel { get; private set; }
+            = new Dictionary<int, List<RendererWithLODLevel>>();
         public Vector3 Center { get; private set; }
         public int TotalTriangles { get; private set; }
         public bool IsSubdivided { get; private set; }
@@ -1248,7 +1431,7 @@ public class IntelligentMeshCombiner : EditorWindow
                     count++;
                 }
             }
-            Center = sum / count;
+            Center = (count > 0) ? sum / count : Vector3.zero;
         }
 
         public void CalculateTriangles()
@@ -1304,7 +1487,10 @@ public class IntelligentMeshCombiner : EditorWindow
         }
     }
 
-    private void GetRenderersWithLODLevels(out List<RendererWithLODLevel> renderersWithLOD, out List<RendererWithLODLevel> renderersWithoutLOD, out int maxLODLevel)
+    private void GetRenderersWithLODLevels(
+        out List<RendererWithLODLevel> renderersWithLOD,
+        out List<RendererWithLODLevel> renderersWithoutLOD,
+        out int maxLODLevel)
     {
         renderersWithLOD = new List<RendererWithLODLevel>();
         renderersWithoutLOD = new List<RendererWithLODLevel>();
@@ -1352,7 +1538,9 @@ public class IntelligentMeshCombiner : EditorWindow
         }
     }
 
-    private void GetAllRenderersWithLODLevels(out List<RendererWithLODLevel> allRenderersWithLODLevels, out int maxLODLevel)
+    private void GetAllRenderersWithLODLevels(
+        out List<RendererWithLODLevel> allRenderersWithLODLevels,
+        out int maxLODLevel)
     {
         allRenderersWithLODLevels = new List<RendererWithLODLevel>();
         maxLODLevel = 0;
@@ -1452,7 +1640,8 @@ public class IntelligentMeshCombiner : EditorWindow
             return false;
         }
 
-        if (useNameContains && !string.IsNullOrEmpty(nameContainsString) && !renderer.name.ToLower().Contains(nameContainsString.ToLower()))
+        if (useNameContains && !string.IsNullOrEmpty(nameContainsString)
+            && !renderer.name.ToLower().Contains(nameContainsString.ToLower()))
         {
             return false;
         }
@@ -1460,6 +1649,7 @@ public class IntelligentMeshCombiner : EditorWindow
         return true;
     }
 }
+
 public class ToolInstructionsWindow : EditorWindow
 {
     private Vector2 scrollPosition;
@@ -1555,6 +1745,7 @@ public class ToolInstructionsWindow : EditorWindow
             "- Rebuild Clusters: Analyzes and clusters objects.\n" +
             "- List Materials: Lists materials in the selected objects.\n" +
             "- Group Objects Only: Groups objects without combining.\n" +
+            "- Combine Clusters Only: Combines meshes without grouping.\n" +
             "- Group and Combine Clusters: Groups and combines meshes.\n" +
             "- Undo Last Operation: Reverts the last action.\n\n" +
 
@@ -1577,4 +1768,3 @@ public class ToolInstructionsWindow : EditorWindow
         EditorGUILayout.EndScrollView();
     }
 }
-
