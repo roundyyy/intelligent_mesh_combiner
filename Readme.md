@@ -123,16 +123,13 @@ The Intelligent Mesh Combiner tool provides three flexible options for objects w
 
 ## Tips
 
-- For extremely large scenes (e.g., 100k+ objects), **Cell-Based Clustering** can often be faster to compute than Proximity or K-Means.
+- For extremely large scenes (e.g., 20k+ objects), **Cell-Based Clustering** can often be faster to compute than Proximity or K-Means.
 - Proximity-Based works well if you need adaptive group sizes that reflect actual distances.
 - K-Means lets you explicitly control the number of clusters.
 - Always make a backup of your scene before performing large-scale mesh combining operations.
 - For large scenes, consider combining meshes in sections rather than everything at once.
 - Pay attention to material-specific colors in the scene gizmos (Proximity/K-Means) to ensure objects are being grouped as expected.
 
-## TO DO
-
-= Speed it up. Too slow when combining lot of objects same time (due to clustering computations, especially on huge scenes)
 
 ## Limitations
 
